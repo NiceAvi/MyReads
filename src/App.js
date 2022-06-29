@@ -1,73 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import * as BooksAPI from './BooksAPI';
-import './App.css';
-import { Routes, Route } from 'react-router-dom';
-import Home from './components/Home';
-import SearchBooks from './components/SearchBooks';
+import React from "react";
+import { Route } from "react-router-dom";
+import Home from "./components/Home";
+import SearchBooks from "./components/SearchBooks";
+import Book from "./components/Book";
+import * as BooksAPI from "./BooksAPI";
+import "./App.css";
 
-const App = () => {
-  const [currentlyReading, setCurrentlyReading] = useState([]);
-  const [wantToRead, setWantToRead] = useState([]);
-  const [read, setRead] = useState([]);
-  const [changed, setChanged] = useState(false);
-
-  useEffect(
-    () => {
-      const fetchBooks = async () => {
-        const books = await BooksAPI.getAll();
-        const currently_reading_books = books.filter(
-          (book) => book.shelf === 'currentlyReading'
-        );
-        setCurrentlyReading(currently_reading_books);
-        const want_to_read_books = books.filter(
-          (book) => book.shelf === 'wantToRead'
-        );
-        setWantToRead(want_to_read_books);
-        const read_books = books.filter((book) => book.shelf === 'read');
-        setRead(read_books);
-      };
-
-      fetchBooks();
-    },
-    [changed]
-  );
-
-  const changeShelf = async (book, shelf) => {
-    await BooksAPI.update(book, shelf);
-    setChanged(!changed);
+class App extends React.Component {
+  state = {
+    books: [],
+    showSearchPage: false,
   };
-  return (
-    <div className="app">
-      {
-        <Routes>
-          <Route
-            path="/"
-            exact
-            element={
-              <Home
-                changeShelf={changeShelf}
-                currentlyReading={currentlyReading}
-                wantToRead={wantToRead}
-                read={read}
-              />
-            }
-          />
+
+  
+  componentDidMount() {
+    BooksAPI.getAll().then((books) => {
+      this.setState({ books });
+    });
+  }
+
+ 
+  toCamelShelf(Shelf) {
+    let shelf = Shelf;
+    Shelf === "currentlyreading" && (shelf = "currentlyReading");
+    Shelf === "wanttoread" && (shelf = "wantToRead");
+    return shelf;
+  }
+
+  
+  updateBookShelf = (book, shelf) => {
+    shelf = this.toCamelShelf(shelf);
+    BooksAPI.update(book, shelf).then(() => {
+      this.setState((state) => ({
+        books: state.books.map((bk) =>
+          bk.id === book.id ? { ...bk, shelf: shelf } : bk
+        ),
+      }));
+    });
+  };
+
+ 
+  addBookToShelf = (book, shelf) => {
+    shelf = this.toCamelShelf(shelf);
+    book.shelf = shelf;
+    let idx = this.state.books.findIndex((bk) => bk["id"] === book.id);
+    let bk = this.state.books;
+    if (idx === -1) {
+      this.setState({ books: bk.concat(book) });
+      this.updateBookShelf(book, shelf);
+    }
+  };
+
+  render() {
+    return (
+      <div className="app">
+        {this.state.showSearchPage ? (
           <Route
             path="/search"
-            exact
-            element={
-              <SearchBooks
-                changeShelf={changeShelf}
-                currentlyReading={currentlyReading}
-                wantToRead={wantToRead}
-                read={read}
+            render={({ history }) => (
+              <Book
+                books={this.state.books}
+                onSetSearchPage={() => {
+                  this.setState({ showSearchPage: false });
+                  history.push("/");
+                }}
+                onAddBookToShelf={this.addBookToShelf}
               />
-            }
+            )}
           />
-        </Routes>
-      }
-    </div>
-  );
-};
+        ) : (
+          <Route
+            exact
+            path="/"
+            render={() => (
+              <div className="list-books">
+                <div className="list-books-title">
+                  <h1>My Reads</h1>
+                </div>
+                <Home
+                  books={this.state.books}
+                  onUpdateBookShelf={this.updateBookShelf}
+                />
+                <SearchBooks
+                  onSetSearchPage={() =>
+                    this.setState({ showSearchPage: true })
+                  }
+                />
+              </div>
+            )}
+          />
+        )}
+      </div>
+    );
+  }
+}
 
 export default App;
